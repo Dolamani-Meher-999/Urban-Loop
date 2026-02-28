@@ -59,3 +59,30 @@ export const unfollowUser = async (req, res) => {
 
   res.json({ message: "User unfollowed" });
 };
+
+export const updateProfile = async (req, res) => {
+  try {
+    const user = await User.findById(req.user._id);
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    user.name = req.body.name || user.name;
+    user.username = req.body.username || user.username;
+    user.bio = req.body.bio || user.bio;
+    user.city = req.body.city || user.city;
+
+    // avatar update (optional)
+    if (req.body.avatar) {
+      user.avatar = req.body.avatar;
+    }
+
+    const updatedUser = await user.save();
+
+    res.json(updatedUser);
+  } catch (error) {
+    console.log(error);
+    res.status(500).json({ message: "Profile update failed" });
+  }
+};
