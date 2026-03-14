@@ -1,33 +1,71 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Home, Users, Compass, User } from "lucide-react";
+import { Home, Compass, User, MessageCircle } from "lucide-react";
 import { useRef, useEffect, useState } from "react";
+import API from "../services/api";
+import socket from "../socket";
+import { useAuth } from "../context/AuthContext";
 
 function FloatingNav() {
   const location = useLocation();
   const navigate = useNavigate();
   const navRef = useRef(null);
 
+  const { user } = useAuth();
+
   const [scrolled, setScrolled] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
 
   const navItems = [
     { name: "Feed", icon: Home, path: "/feed" },
-    { name: "Communities", icon: Users, path: "/communities" },
+
+    // MESSAGE CENTRE
+    { name: "Messages", icon: MessageCircle, path: "/chat" },
+
     { name: "Explore", icon: Compass, path: "/explore" },
     { name: "Profile", icon: User, path: "/profile/me" },
   ];
 
-  // 🔥 Detect Scroll For Dynamic Appearance
+  // ================= Scroll Effect =================
   useEffect(() => {
-    const handleScroll = () => {
-      setScrolled(window.scrollY > 20);
-    };
+    const handleScroll = () => setScrolled(window.scrollY > 20);
 
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-  // 🧲 Magnetic Effect
+  // ================= Fetch unread count =================
+  const fetchUnread = async () => {
+    try {
+      const res = await API.get("/messages/unread/count");
+      setUnreadCount(res.data.count);
+    } catch (err) {
+      console.log("Unread fetch error:", err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnread();
+  }, []);
+
+  // ================= REALTIME SOCKET =================
+  useEffect(() => {
+    if (!user) return;
+
+    // notify backend user is online
+    socket.emit("user-online", user._id);
+
+    // ⭐ REALTIME NAV BADGE
+    socket.on("new-message-notification", () => {
+      setUnreadCount((prev) => prev + 1);
+    });
+
+    return () => {
+      socket.off("new-message-notification");
+    };
+  }, [user]);
+
+  // ================= Magnetic Hover =================
   const handleMouseMove = (e) => {
     const item = e.currentTarget;
     const rect = item.getBoundingClientRect();
@@ -41,7 +79,7 @@ function FloatingNav() {
   };
 
   const resetPosition = (e) => {
-    e.currentTarget.style.transform = `translate(0px, 0px)`;
+    e.currentTarget.style.transform = `translate(0px,0px)`;
   };
 
   return (
@@ -52,18 +90,17 @@ function FloatingNav() {
         animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring", stiffness: 120 }}
         className={`relative flex items-center gap-2 px-4 py-2 rounded-full transition-all duration-300
-          ${
-            scrolled
-              ? "bg-zinc-900/70 backdrop-blur-2xl border border-white/20 shadow-2xl"
-              : "bg-white/5 backdrop-blur-xl border border-white/10"
-          }`}
+        ${
+          scrolled
+            ? "bg-zinc-900/70 backdrop-blur-2xl border border-white/20 shadow-2xl"
+            : "bg-white/5 backdrop-blur-xl border border-white/10"
+        }`}
       >
-        {/* Subtle Inner Contrast Layer */}
         <div className="absolute inset-0 rounded-full bg-gradient-to-b from-white/5 to-black/20 pointer-events-none" />
 
         {navItems.map((item) => {
-          const isActive = location.pathname === item.path;
           const Icon = item.icon;
+          const isActive = location.pathname === item.path;
 
           return (
             <button
@@ -71,9 +108,8 @@ function FloatingNav() {
               onClick={() => navigate(item.path)}
               onMouseMove={handleMouseMove}
               onMouseLeave={resetPosition}
-              className="relative px-5 py-2 rounded-full text-sm font-medium transition-all duration-200"
+              className="relative px-5 py-2 rounded-full text-sm font-medium"
             >
-              {/* Morphing Active Indicator */}
               {isActive && (
                 <motion.div
                   layoutId="active-pill"
@@ -87,13 +123,23 @@ function FloatingNav() {
               )}
 
               <span
-                className={`relative z-10 flex items-center gap-2 transition-colors ${
+                className={`relative z-10 flex items-center gap-2 ${
                   isActive
-                    ? "text-white drop-shadow-md"
+                    ? "text-white"
                     : "text-zinc-300 hover:text-white"
                 }`}
               >
-                <Icon size={16} />
+                <div className="relative">
+                  <Icon size={16} />
+
+                  {/* 🔴 Unread Badge */}
+                  {item.name === "Messages" && unreadCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-500 text-white text-[10px] px-1.5 rounded-full">
+                      {unreadCount}
+                    </span>
+                  )}
+                </div>
+
                 {item.name}
               </span>
             </button>
