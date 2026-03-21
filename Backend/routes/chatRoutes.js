@@ -1,15 +1,24 @@
 import express from "express";
 import protect from "../middleware/authMiddleware.js";
-
 import {
-  createChat,
-  getChats,
+  getOrCreateChat,
+  createGroupChat,
+  getUserChats,
+  deleteChat,
 } from "../controllers/chatController.js";
 
 const router = express.Router();
 
-router.post("/create", protect, createChat);
+// 1-to-1 chat (get existing or create)
+router.post("/create", protect, getOrCreateChat);
 
-router.get("/", protect, getChats);
+// Group chat
+router.post("/group", protect, createGroupChat);
+
+// Sidebar list (with unread counts)
+router.get("/", protect, getUserChats);
+
+// Delete entire chat + all its messages
+router.delete("/:chatId", protect, deleteChat);
 
 export default router;
