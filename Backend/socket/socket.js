@@ -17,8 +17,13 @@ export const initSocket = (server) => {
     // ── Online presence ────────────────────────────────────
     socket.on("user-online", (userId) => {
       onlineUsers.set(userId, socket.id);
-      socket.join(userId); // personal room for DM notifications
+      socket.join(userId);
       io.emit("online-users", Array.from(onlineUsers.keys()));
+    });
+
+    // Client can request the current list at any time (e.g. when opening a chat)
+    socket.on("get-online-users", () => {
+      socket.emit("online-users", Array.from(onlineUsers.keys()));
     });
 
     // ── Join / leave a 1-to-1 or group chat room ──────────
