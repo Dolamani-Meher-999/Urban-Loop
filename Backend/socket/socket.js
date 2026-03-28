@@ -102,6 +102,87 @@ export const initSocket = (server) => {
       }
     });
 
+    // ── Call Signaling ─────────────────────────────────────
+    // Active rooms: roomId → Set of participantUserIds
+    // Stored at module level so all sockets can access it
+
+    socket.on("call-invite", ({ roomId, type, callType, chatId, to, from, callerName, callerAvatar }) => {
+      // to = array of userIds to invite
+      to.forEach((userId) => {
+        const targetSocket = onlineUsers.get(userId);
+        if (targetSocket) {
+          io.to(targetSocket).emit("incoming-call", {
+            roomId, type, callType, chatId, from, callerName, callerAvatar,
+          });
+        }
+      });
+    });
+
+    socket.on("call-answer", ({ roomId, to, from }) => {
+      const targetSocket = onlineUsers.get(to);
+      if (targetSocket) io.to(targetSocket).emit("call-answered", { roomId, from });
+    });
+
+    socket.on("call-rejected", ({ roomId, to, from }) => {
+      const targetSocket = onlineUsers.get(to);
+      if (targetSocket) io.to(targetSocket).emit("call-rejected", { roomId, from });
+    });
+
+    socket.on("call-ended", ({ roomId, chatId }) => {
+      // Broadcast to entire call room
+      io.to(`call:${roomId}`).emit("call-ended", { roomId });
+    });
+
+    socket.on("call-busy", ({ to, from }) => {
+      const targetSocket = onlineUsers.get(to);
+      if (targetSocket) io.to(targetSocket).emit("call-busy", { from });
+    });
+
+    socket.on("join-call-room", (roomId) => {
+      socket.join(`call:${roomId}`);
+      socket.to(`call:${roomId}`).emit("peer-joined", { socketId: socket.id });
+    });
+
+    socket.on("leave-call-room", (roomId) => {
+      socket.leave(`call:${roomId}`);
+      socket.to(`call:${roomId}`).emit("peer-left", { socketId: socket.id });
+    });
+
+    // ── WebRTC Signaling ───────────────────────────────────
+    socket.on("webrtc-offer", ({ roomId, offer, to }) => {
+      const targetSocket = onlineUsers.get(to);
+      if (targetSocket) {
+        io.to(targetSocket).emit("webrtc-offer", { offer, from: socket.id });
+      }
+    });
+
+    socket.on("webrtc-answer", ({ roomId, answer, to }) => {
+      const targetSocket = onlineUsers.get(to);
+      if (targetSocket) {
+        io.to(targetSocket).emit("webrtc-answer", { answer, from: socket.id });
+      }
+    });
+
+    socket.on("webrtc-ice-candidate", ({ roomId, candidate, to }) => {
+      const targetSocket = onlineUsers.get(to);
+      if (targetSocket) {
+        io.to(targetSocket).emit("webrtc-ice-candidate", { candidate, from: socket.id });
+      }
+    });
+
+    // Mesh signaling for group calls — broadcast to entire room
+    socket.on("webrtc-offer-room", ({ roomId, offer, targetSocketId }) => {
+      io.to(targetSocketId).emit("webrtc-offer", { offer, from: socket.id });
+    });
+
+    socket.on("webrtc-answer-room", ({ roomId, answer, targetSocketId }) => {
+      io.to(targetSocketId).emit("webrtc-answer", { answer, from: socket.id });
+    });
+
+    socket.on("webrtc-ice-room", ({ roomId, candidate, targetSocketId }) => {
+      io.to(targetSocketId).emit("webrtc-ice-candidate", { candidate, from: socket.id });
+    });
+
     // ── Disconnect ─────────────────────────────────────────
     socket.on("disconnect", () => {
       console.log("❌ Socket disconnected:", socket.id);
