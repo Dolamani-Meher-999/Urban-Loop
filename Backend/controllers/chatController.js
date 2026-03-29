@@ -6,16 +6,20 @@ import Message from "../models/Message.js";
 // ─────────────────────────────────────────────
 export const getOrCreateChat = async (req, res) => {
   try {
-    const { userId } = req.body;
+    const { userId, recipientId } = req.body;
+    const targetId = recipientId || userId; // accept both field names
 
-    if (userId === req.user.id)
+    if (!targetId)
+      return res.status(400).json({ message: "userId or recipientId required" });
+
+    if (targetId === req.user.id || targetId === req.user._id?.toString())
       return res.status(400).json({ message: "Cannot chat with yourself" });
 
     let chat = await Chat.findOne({
       isGroup: false,
-      participants: { $all: [req.user.id, userId], $size: 2 },
+      participants: { $all: [req.user.id, targetId], $size: 2 },
     })
-      .populate("participants", "name avatar")
+      .populate("participants", "name avatar _id username")
       .populate({
         path: "lastMessage",
         populate: { path: "sender", select: "name avatar" },
@@ -23,11 +27,10 @@ export const getOrCreateChat = async (req, res) => {
 
     if (!chat) {
       chat = await Chat.create({
-        participants: [req.user.id, userId],
+        participants: [req.user.id, targetId],
         isGroup: false,
       });
-      chat = await chat
-        .populate("participants", "name avatar");
+      chat = await chat.populate("participants", "name avatar _id username");
     }
 
     res.json(chat);
@@ -71,10 +74,10 @@ export const createGroupChat = async (req, res) => {
 export const getUserChats = async (req, res) => {
   try {
     const chats = await Chat.find({ participants: req.user.id })
-      .populate("participants", "name avatar")
+      .populate("participants", "name avatar _id username")
       .populate({
         path: "lastMessage",
-        populate: { path: "sender", select: "name avatar" },
+        populate: { path: "sender", select: "name avatar _id" },
       })
       .sort({ updatedAt: -1 })
       .lean();

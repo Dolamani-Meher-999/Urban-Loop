@@ -4,6 +4,7 @@ import { useNavigate } from "react-router-dom";
 import API from "../services/api";
 import { useAuth } from "../context/AuthContext";
 import socket from "../socket";
+import CallHistory from "./CallHistory";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const fmtTime = (iso) => {
@@ -246,17 +247,17 @@ function CreateGroupModal({ onClose, onCreated }) {
 }
 
 // ─── ChatSidebar ──────────────────────────────────────────────────────────────
-function ChatSidebar({ onSelectChat, selectedChatId, onChatDeleted }) {
+function ChatSidebar({ onSelectChat, selectedChatId, onChatDeleted, onCallAgain }) {
   const { user } = useAuth();
+  const [activeTab,    setActiveTab]    = useState("chats"); // "chats" | "calls"
   const [chats,        setChats]        = useState([]);
   const [onlineUsers,  setOnlineUsers]  = useState([]);
   const [search,       setSearch]       = useState("");
   const [showNewGroup, setShowNewGroup] = useState(false);
-  const [showNewMenu,  setShowNewMenu]  = useState(false);  // ← dropdown toggle
+  const [showNewMenu,  setShowNewMenu]  = useState(false);
 
   const newMenuRef = useRef(null);
-
-  const navigate = useNavigate();
+  const navigate   = useNavigate();
 
   const fetchChats = useCallback(async () => {
     try {
@@ -268,9 +269,14 @@ function ChatSidebar({ onSelectChat, selectedChatId, onChatDeleted }) {
   useEffect(() => { fetchChats(); }, [fetchChats]);
 
   useEffect(() => {
-    socket.on("online-users", setOnlineUsers);
+    // ── Named handlers — MUST pass the same reference to socket.off() ──────
+    // Using bare socket.off("event") without a ref removes ALL listeners for
+    // that event globally, including ones registered by ChatWindow, breaking
+    // real-time for the other component. Always use named refs.
 
-    socket.on("new-message-notification", ({ chatId, message }) => {
+    const onOnline = (users) => setOnlineUsers(users);
+
+    const onNewMsg = ({ chatId, message }) => {
       setChats((prev) => {
         const idx = prev.findIndex((c) => c._id === chatId);
         if (idx === -1) { fetchChats(); return prev; }
@@ -282,9 +288,9 @@ function ChatSidebar({ onSelectChat, selectedChatId, onChatDeleted }) {
         const rest = prev.filter((c) => c._id !== chatId);
         return [updated, ...rest];
       });
-    });
+    };
 
-    socket.on("receive-message", (msg) => {
+    const onReceive = (msg) => {
       const chatId = msg.chat || msg.chat?._id;
       if (!chatId) return;
       setChats((prev) => {
@@ -293,23 +299,30 @@ function ChatSidebar({ onSelectChat, selectedChatId, onChatDeleted }) {
         const updated = { ...prev[idx], lastMessage: msg };
         return [updated, ...prev.filter((c) => c._id !== chatId)];
       });
-    });
+    };
 
-    socket.on("messages-read", ({ chatId }) => {
+    const onRead = ({ chatId }) => {
       setChats((prev) => prev.map((c) => c._id === chatId ? { ...c, unreadCount: 0 } : c));
-    });
+    };
 
-    socket.on("chat-deleted", ({ chatId }) => {
+    const onChatDel = ({ chatId }) => {
       setChats((prev) => prev.filter((c) => c._id !== chatId));
       onChatDeleted?.(chatId);
-    });
+    };
+
+    socket.on("online-users",             onOnline);
+    socket.on("new-message-notification", onNewMsg);
+    socket.on("receive-message",          onReceive);
+    socket.on("messages-read",            onRead);
+    socket.on("chat-deleted",             onChatDel);
 
     return () => {
-      socket.off("online-users");
-      socket.off("new-message-notification");
-      socket.off("receive-message");
-      socket.off("messages-read");
-      socket.off("chat-deleted");
+      // Pass handler refs — this only removes OUR listeners, not ChatWindow's
+      socket.off("online-users",             onOnline);
+      socket.off("new-message-notification", onNewMsg);
+      socket.off("receive-message",          onReceive);
+      socket.off("messages-read",            onRead);
+      socket.off("chat-deleted",             onChatDel);
     };
   }, [selectedChatId, fetchChats]);
 
@@ -447,9 +460,39 @@ function ChatSidebar({ onSelectChat, selectedChatId, onChatDeleted }) {
               placeholder="Search…"
               className="relative w-full bg-white/[0.03] border border-white/10 rounded-xl py-2.5 pl-4 pr-4 text-sm focus:outline-none focus:border-purple-500/50 transition-all placeholder:text-zinc-600" />
           </div>
+
+          {/* ── Tab pills ── */}
+          <div className="flex gap-1 mt-3 bg-white/[0.03] border border-white/[0.06] rounded-xl p-1">
+            {[
+              { id: "chats", icon: "M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z", label: "Chats" },
+              { id: "calls", icon: "M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z", label: "Calls" },
+            ].map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => setActiveTab(tab.id)}
+                className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  activeTab === tab.id
+                    ? "bg-purple-600/20 text-purple-300 shadow-sm"
+                    : "text-zinc-500 hover:text-zinc-300"
+                }`}
+              >
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={tab.icon} />
+                </svg>
+                {tab.label}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {/* Chat list */}
+        {/* ── Calls tab ── */}
+        {activeTab === "calls" ? (
+          <div className="flex-1 min-h-0">
+            <CallHistory onCallAgain={onCallAgain} />
+          </div>
+        ) : (
+
+        /* ── Chats list ── */
         <div className="flex-1 overflow-y-auto px-3 space-y-0.5 pb-4 scrollbar-hide min-h-0">
           <AnimatePresence initial={false}>
             {filtered.length === 0 && (
@@ -522,6 +565,7 @@ function ChatSidebar({ onSelectChat, selectedChatId, onChatDeleted }) {
             })}
           </AnimatePresence>
         </div>
+        )} {/* end activeTab === "calls" ternary */}
       </div>
     </>
   );
