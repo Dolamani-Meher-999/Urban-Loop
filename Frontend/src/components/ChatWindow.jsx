@@ -7,6 +7,7 @@ import { useAuth } from "../context/AuthContext";
 import CreatePollModal from "./CreatePollModal";
 import PollBubble from "./PollBubble";
 import ForwardModal from "./ForwardModal";
+import CallRoom from "./CallRoom";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 const fmt = (d) =>
@@ -808,6 +809,7 @@ function ChatWindow({ chat, onDeleteChat }) {
   const [page,            setPage]            = useState(1);
   const [hasMore,         setHasMore]         = useState(true);
   const [isOnline,        setIsOnline]        = useState(false);
+  const [activeCall,      setActiveCall]      = useState(null); // { type, roomId, participants }
 
   const bottomRef    = useRef();
   const pickerRef    = useRef();
@@ -868,14 +870,29 @@ function ChatWindow({ chat, onDeleteChat }) {
     socket.on("receive-message", onMsg); socket.on("user-typing", onTyping); socket.on("stop-typing", onStopTyping);
     socket.on("message-edited", onEdited); socket.on("message-deleted", onDeleted); socket.on("reaction-updated", onReaction);
     socket.on("poll-updated", onPollUpdated);
-    socket.on("messages-read", onRead); socket.on("online-users", onOnline); socket.on("chat-deleted", onChatDel);
+    socket.on("messages-read", onRead); socket.on("chat-deleted", onChatDel);
     return () => {
       socket.off("receive-message", onMsg); socket.off("user-typing", onTyping); socket.off("stop-typing", onStopTyping);
       socket.off("message-edited", onEdited); socket.off("message-deleted", onDeleted); socket.off("reaction-updated", onReaction);
       socket.off("poll-updated", onPollUpdated);
-      socket.off("messages-read", onRead); socket.off("online-users", onOnline); socket.off("chat-deleted", onChatDel);
+      socket.off("messages-read", onRead); socket.off("chat-deleted", onChatDel);
     };
-  }, [chat._id, user._id, otherUser?._id]);
+  }, [chat._id, user._id]);
+
+  // ── Online status — separate effect so otherUser._id is always fresh ──────
+  // Uses a ref so the handler never captures a stale value
+  const otherUserIdRef = useRef(otherUser?._id);
+  useEffect(() => { otherUserIdRef.current = otherUser?._id; }, [otherUser?._id]);
+
+  useEffect(() => {
+    if (chat.isGroup || !otherUser?._id) return;
+    const onOnline = (users) => setIsOnline(users.includes(otherUserIdRef.current));
+    socket.on("online-users", onOnline);
+    // Ask the server to re-broadcast the current online list so we get
+    // the correct status immediately when switching chats
+    socket.emit("get-online-users");
+    return () => { socket.off("online-users", onOnline); };
+  }, [chat._id, chat.isGroup, otherUser?._id]);
 
   useEffect(() => {
     const h = (e) => { if (pickerRef.current && !pickerRef.current.contains(e.target)) setShowEmojiPicker(false); };
@@ -938,6 +955,33 @@ function ChatWindow({ chat, onDeleteChat }) {
     } catch (err) { console.error(err); }
   };
 
+  // ── Call handlers ──────────────────────────────────────────────────────────
+  const startCall = useCallback((type) => {
+    const roomId = `${chat._id}-${Date.now()}`;
+    const callType = chat.isGroup ? "group" : "direct";
+    const participants = chat.participants?.map((p) => ({
+      _id: p._id, name: p.name, avatar: p.avatar,
+    })) || [];
+
+    // Invite all other participants
+    const toIds = participants
+      .filter((p) => p._id !== user._id)
+      .map((p) => p._id);
+
+    socket.emit("call-invite", {
+      roomId,
+      type,
+      callType,
+      chatId: chat._id,
+      to: toIds,
+      from: user._id,
+      callerName: user.name,
+      callerAvatar: user.avatar,
+    });
+
+    setActiveCall({ roomId, type, callType, participants });
+  }, [chat, user]);
+
   return (
     // CameraModal is rendered here at the TOP LEVEL — not inside the footer/overlay chain
     // This lets position:fixed work correctly without being clipped by backdrop-filter ancestors
@@ -967,6 +1011,22 @@ function ChatWindow({ chat, onDeleteChat }) {
             message={forwardingMsg}
             onClose={() => setForwardingMsg(null)}
             onDone={() => setForwardingMsg(null)}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* ── Active call overlay ── */}
+      <AnimatePresence>
+        {activeCall && (
+          <CallRoom
+            roomId={activeCall.roomId}
+            type={activeCall.type}
+            callType={activeCall.callType}
+            chatId={chat._id}
+            participants={activeCall.participants}
+            userId={user._id}
+            isInitiator={true}
+            onEnd={() => setActiveCall(null)}
           />
         )}
       </AnimatePresence>
@@ -1008,11 +1068,22 @@ function ChatWindow({ chat, onDeleteChat }) {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {!chat.isGroup && (
-            <button className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-white/[0.08] text-zinc-400 hover:text-white transition-all border border-white/5">
-              <Icon id="phone" className="w-5 h-5" />
-            </button>
-          )}
+          {/* Voice call */}
+          <button
+            onClick={() => startCall("voice")}
+            className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-emerald-500/10 text-zinc-400 hover:text-emerald-400 transition-all border border-white/5"
+            title="Voice call"
+          >
+            <Icon id="phone" className="w-5 h-5" />
+          </button>
+          {/* Video call */}
+          <button
+            onClick={() => startCall("video")}
+            className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-purple-500/10 text-zinc-400 hover:text-purple-400 transition-all border border-white/5"
+            title="Video call"
+          >
+            <Icon id="video" className="w-5 h-5" />
+          </button>
           <button onClick={handleDeleteChat} className="p-2.5 rounded-xl bg-white/[0.03] hover:bg-red-500/10 text-zinc-400 hover:text-red-400 transition-all border border-white/5">
             <Icon id="trash" className="w-5 h-5" />
           </button>

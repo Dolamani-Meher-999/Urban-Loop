@@ -14,7 +14,8 @@ import userRoutes      from "./routes/userRoutes.js";
 import postRoutes      from "./routes/postRoutes.js";
 import chatRoutes      from "./routes/chatRoutes.js";
 import messageRoutes   from "./routes/messageRoutes.js";
-import communityRoutes from "./routes/Communityroutes.js";
+import communityRoutes from "./routes/communityRoutes.js";
+import callRoutes      from "./routes/callRoutes.js";
 
 import { initSocket } from "./socket/socket.js";
 
@@ -62,6 +63,7 @@ app.use("/api/posts", postRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/messages", messageRoutes);
 app.use("/api/community", communityRoutes);
+app.use("/api/calls",     callRoutes);
 
 // ── Health check ───────────────────────────────────────────
 app.get("/", (_req, res) => res.send("Backend API Running 🚀"));
