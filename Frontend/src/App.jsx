@@ -4,17 +4,18 @@ import { AnimatePresence } from "framer-motion";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 
-import Landing         from "./pages/Landing";
-import Login           from "./pages/Login";
-import Register        from "./pages/Register";
-import Feed            from "./pages/Feed";
-import Profile         from "./pages/Profile";
-import ChatPage        from "./pages/ChatPage";
+import Landing from "./pages/Landing";
+import Login from "./pages/Login";
+import Register from "./pages/Register";
+import Feed from "./pages/Feed";
+import Profile from "./pages/Profile";
+import ChatPage from "./pages/ChatPage";
 import CommunitiesPage from "./pages/CommunitiesPage";
-import CommunityRoom   from "./pages/CommunityRoom";
+import CommunityRoom from "./pages/CommunityRoom";
+import Explore from "./pages/Explore";
 
 import IncomingCallNotification from "./components/IncomingCallNotification";
-import CallRoom                 from "./components/CallRoom";
+import CallRoom from "./components/CallRoom";
 
 import "./App.css";
 
@@ -23,10 +24,10 @@ function AppInner() {
 
   const handleAcceptCall = (callData) => {
     setActiveCall({
-      roomId:      callData.roomId,
-      type:        callData.type,
-      callType:    callData.callType,
-      chatId:      callData.chatId,
+      roomId: callData.roomId,
+      type: callData.type,
+      callType: callData.callType,
+      chatId: callData.chatId,
       participants: [],
       isInitiator: false,
     });
@@ -54,18 +55,69 @@ function AppInner() {
       </AnimatePresence>
 
       <Routes>
-        <Route path="/"         element={<Landing />} />
-        <Route path="/login"    element={<Login />} />
+        <Route path="/" element={<Landing />} />
+        <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
 
-        <Route path="/feed" element={<ProtectedRoute><Feed /></ProtectedRoute>}/>
-        <Route path="/profile/:id" element={<ProtectedRoute><Profile /></ProtectedRoute>}/>
+        <Route
+          path="/feed"
+          element={
+            <ProtectedRoute>
+              <Feed />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/profile/:id"
+          element={
+            <ProtectedRoute>
+              <Profile />
+            </ProtectedRoute>
+          }
+        />
 
-        <Route path="/chat"          element={<ProtectedRoute><ChatPage /></ProtectedRoute>}/>
-        <Route path="/chat/:userId"  element={<ProtectedRoute><ChatPage /></ProtectedRoute>}/>
+        <Route
+          path="/chat"
+          element={
+            <ProtectedRoute>
+              <ChatPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/chat/:userId"
+          element={
+            <ProtectedRoute>
+              <ChatPage />
+            </ProtectedRoute>
+          }
+        />
 
-        <Route path="/communities"     element={<ProtectedRoute><CommunitiesPage /></ProtectedRoute>}/>
-        <Route path="/communities/:id" element={<ProtectedRoute><CommunityRoom /></ProtectedRoute>}/>
+        <Route
+          path="/communities"
+          element={
+            <ProtectedRoute>
+              <CommunitiesPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/communities/:id"
+          element={
+            <ProtectedRoute>
+              <CommunityRoom />
+            </ProtectedRoute>
+          }
+        />
+
+        <Route
+          path="/explore/:city"
+          element={
+            <ProtectedRoute>
+              <Explore />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </>
   );
@@ -73,7 +125,7 @@ function AppInner() {
 
 function App() {
   return (
-    <div style={{ height: "100dvh", display: "flex", flexDirection: "column"}}>
+    <div style={{ height: "100dvh", display: "flex", flexDirection: "column" }}>
       <BrowserRouter>
         <AuthProvider>
           <AppInner />
