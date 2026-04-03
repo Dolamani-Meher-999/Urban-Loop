@@ -16,6 +16,7 @@ import chatRoutes      from "./routes/chatRoutes.js";
 import messageRoutes   from "./routes/messageRoutes.js";
 import communityRoutes from "./routes/communityRoutes.js";
 import callRoutes      from "./routes/callRoutes.js";
+import exploreRoutes   from "./routes/exploreRoutes.js";   // ← ADDED
 
 import { initSocket } from "./socket/socket.js";
 
@@ -40,7 +41,7 @@ app.use(
 
 // ── Rate limiting ──────────────────────────────────────────
 const apiLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 min
+  windowMs: 15 * 60 * 1000,
   max: 300,
   standardHeaders: true,
   legacyHeaders: false,
@@ -48,8 +49,8 @@ const apiLimiter = rateLimit({
 });
 
 const messageLimiter = rateLimit({
-  windowMs: 60 * 1000,  // 1 min
-  max: 60,              // max 60 messages/min per IP
+  windowMs: 60 * 1000,
+  max: 60,
   message: { message: "Slow down — too many messages." },
 });
 
@@ -57,28 +58,25 @@ app.use("/api/", apiLimiter);
 app.use("/api/messages", messageLimiter);
 
 // ── Routes ─────────────────────────────────────────────────
-app.use("/api/auth", authRoutes);
-app.use("/api/users", userRoutes);
-app.use("/api/posts", postRoutes);
-app.use("/api/chat", chatRoutes);
-app.use("/api/messages", messageRoutes);
+app.use("/api/auth",      authRoutes);
+app.use("/api/users",     userRoutes);
+app.use("/api/posts",     postRoutes);
+app.use("/api/chat",      chatRoutes);
+app.use("/api/messages",  messageRoutes);
 app.use("/api/community", communityRoutes);
 app.use("/api/calls",     callRoutes);
+app.use("/api/explore",   exploreRoutes);   // ← ADDED
 
 // ── Health check ───────────────────────────────────────────
 app.get("/", (_req, res) => res.send("Backend API Running 🚀"));
 
 // ── Global error handler ───────────────────────────────────
-// eslint-disable-next-line no-unused-vars
 app.use((err, req, res, _next) => {
   console.error("Unhandled error:", err);
-
-  // multer file-type or size errors
   if (err.code === "LIMIT_FILE_SIZE")
     return res.status(413).json({ message: "File too large (max 50 MB)" });
   if (err.message?.startsWith("File type"))
     return res.status(415).json({ message: err.message });
-
   res.status(500).json({ message: err.message || "Internal server error" });
 });
 

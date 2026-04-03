@@ -22,7 +22,7 @@ function FloatingNav() {
     // MESSAGE CENTRE
     { name: "Messages", icon: MessageCircle, path: "/chat" },
 
-    { name: "Explore", icon: Compass, path: "/explore" },
+    { name: "Explore", icon: Compass, path: `/explore/${user?.city}` },
     { name: "Profile", icon: User, path: "/profile/me" },
   ];
 
@@ -100,7 +100,9 @@ function FloatingNav() {
 
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path;
+          const isActive = item.path.startsWith("/explore/")
+            ? location.pathname.startsWith("/explore/")
+            : location.pathname === item.path;
 
           return (
             <button
@@ -124,9 +126,7 @@ function FloatingNav() {
 
               <span
                 className={`relative z-10 flex items-center gap-2 ${
-                  isActive
-                    ? "text-white"
-                    : "text-zinc-300 hover:text-white"
+                  isActive ? "text-white" : "text-zinc-300 hover:text-white"
                 }`}
               >
                 <div className="relative">
